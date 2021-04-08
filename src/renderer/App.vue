@@ -1,12 +1,11 @@
 <template lang="pug">
-#container(v-if="isProd && !isNt" :class="theme" @mouseenter="enableIgnoreMouseEvents" @mouseleave="dieableIgnoreMouseEvents")
+#container(v-if="isProd && !isDT && !isLinux" :class="theme" @mouseenter="enableIgnoreMouseEvents" @mouseleave="dieableIgnoreMouseEvents")
   core-aside#left
   #right
     core-toolbar#toolbar
     core-view#view
     core-player#player
   core-icons
-  material-xm-verify-modal(v-show="globalObj.xm.isShowVerify" :show="globalObj.xm.isShowVerify" :bg-close="false" @close="handleXMVerifyModalClose")
   material-version-modal(v-show="version.showModal")
   material-pact-modal(v-show="!setting.isAgreePact || globalObj.isShowPact")
 #container(v-else :class="theme")
@@ -16,7 +15,6 @@
     core-view#view
     core-player#player
   core-icons
-  material-xm-verify-modal(v-show="globalObj.xm.isShowVerify" :show="globalObj.xm.isShowVerify" :bg-close="false" @close="handleXMVerifyModalClose")
   material-version-modal(v-show="version.showModal")
   material-pact-modal(v-show="!setting.isAgreePact || globalObj.isShowPact")
 </template>
@@ -27,8 +25,9 @@ import { mapMutations, mapGetters, mapActions } from 'vuex'
 import { rendererOn, rendererSend, rendererInvoke, NAMES } from '../common/ipc'
 import { isLinux } from '../common/utils'
 import music from './utils/music'
-import { throttle, openUrl, compareVer } from './utils'
+import { throttle, openUrl, compareVer, getPlayList, parseUrlParams } from './utils'
 import { base as eventBaseName } from './event/names'
+import apiSourceInfo from './utils/music/api-source-info'
 
 window.ELECTRON_DISABLE_SECURITY_WARNINGS = process.env.ELECTRON_DISABLE_SECURITY_WARNINGS
 dnscache({
@@ -37,18 +36,36 @@ dnscache({
   cachesize: 1000,
 })
 
+const listThrottle = (fn, delay = 100) => {
+  let timer = null
+  let _data = {}
+  return function(data) {
+    Object.assign(_data, data)
+    if (timer) return
+    timer = setTimeout(() => {
+      timer = null
+      fn.call(this, _data)
+      _data = {}
+    }, delay)
+  }
+}
+
 export default {
   data() {
     return {
       isProd: process.env.NODE_ENV === 'production',
-      isNt: false,
+      isDT: false,
+      isLinux,
       globalObj: {
-        apiSource: 'test',
+        apiSource: null,
         proxy: {},
         isShowPact: false,
         qualityList: {},
-        xm: {
-          isShowVerify: false,
+        userApi: {
+          list: [],
+          status: false,
+          message: 'initing',
+          apis: {},
         },
       },
       updateTimeout: null,
@@ -69,24 +86,27 @@ export default {
     }),
   },
   created() {
-    this.saveDefaultList = throttle(n => {
-      window.electronStore_list.set('defaultList', n)
-    }, 500)
-    this.saveLoveList = throttle(n => {
-      window.electronStore_list.set('loveList', n)
-    }, 500)
-    this.saveUserList = throttle(n => {
-      window.electronStore_list.set('userList', n)
-    }, 500)
+    this.saveMyList = listThrottle(data => {
+      rendererSend(NAMES.mainWindow.save_playlist, {
+        type: 'myList',
+        data,
+      })
+    }, 300)
     this.saveDownloadList = throttle(n => {
-      window.electronStore_list.set('downloadList', n)
+      rendererSend(NAMES.mainWindow.save_playlist, {
+        type: 'downloadList',
+        data: n,
+      })
     }, 1000)
     this.saveSearchHistoryList = throttle(n => {
-      window.electronStore_data.set('searchHistoryList', n)
+      rendererSend(NAMES.mainWindow.save_data, {
+        path: 'searchHistoryList',
+        data: n,
+      })
     }, 500)
   },
   mounted() {
-    document.body.classList.add(this.isNt ? 'noTransparent' : 'transparent')
+    document.body.classList.add(this.isDT ? 'disableTransparent' : 'transparent')
     window.eventHub.$emit(eventBaseName.bindKey)
     this.init()
   },
@@ -99,19 +119,19 @@ export default {
     },
     defaultList: {
       handler(n) {
-        this.saveDefaultList(n)
+        this.saveMyList({ defaultList: n })
       },
       deep: true,
     },
     loveList: {
       handler(n) {
-        this.saveLoveList(n)
+        this.saveMyList({ loveList: n })
       },
       deep: true,
     },
     userList: {
       handler(n) {
-        this.saveUserList(n)
+        this.saveMyList({ userList: n })
       },
       deep: true,
     },
@@ -124,8 +144,20 @@ export default {
     searchHistoryList(n) {
       this.saveSearchHistoryList(n)
     },
-    'globalObj.apiSource'(n) {
-      this.globalObj.qualityList = music.supportQuality[n]
+    'globalObj.apiSource'(n, o) {
+      if (/^user_api/.test(n)) {
+        this.globalObj.qualityList = {}
+        this.globalObj.userApi.status = false
+        this.globalObj.userApi.message = 'initing'
+      } else {
+        this.globalObj.qualityList = music.supportQuality[n]
+      }
+      if (o === null) return
+      rendererInvoke(NAMES.mainWindow.set_user_api, n).catch(err => {
+        console.log(err)
+        let api = apiSourceInfo.find(api => !api.disabled)
+        if (api) this.globalObj.apiSource = api.id
+      })
       if (n != this.setting.apiSource) {
         this.setSetting(Object.assign({}, this.setting, {
           apiSource: n,
@@ -135,16 +167,38 @@ export default {
     'windowSizeActive.fontSize'(n) {
       document.documentElement.style.fontSize = n
     },
+    'setting.isShowAnimation': {
+      handler(n) {
+        if (n) {
+          if (document.body.classList.contains('disableAnimation')) {
+            document.body.classList.remove('disableAnimation')
+          }
+        } else {
+          if (!document.body.classList.contains('disableAnimation')) {
+            document.body.classList.add('disableAnimation')
+          }
+        }
+      },
+      immediate: true,
+    },
   },
   methods: {
     ...mapActions(['getVersionInfo']),
     ...mapMutations(['setNewVersion', 'setVersionModalVisible', 'setDownloadProgress', 'setSetting', 'setDesktopLyricConfig']),
     ...mapMutations('list', ['initList']),
     ...mapMutations('download', ['updateDownloadList']),
+    ...mapMutations('search', {
+      setSearchHistoryList: 'setHistory',
+    }),
+    ...mapMutations('player', {
+      setPlayList: 'setList',
+    }),
+    ...mapActions('songList', ['getListDetailAll']),
     init() {
       document.documentElement.style.fontSize = this.windowSizeActive.fontSize
 
-      rendererInvoke(NAMES.mainWindow.get_env_params).then(this.handleEnvParamsInit)
+      const asyncTask = []
+      asyncTask.push(rendererInvoke(NAMES.mainWindow.get_env_params).then(this.handleEnvParamsInit))
 
       document.body.addEventListener('click', this.handleBodyClick, true)
       rendererOn(NAMES.mainWindow.update_available, (e, info) => {
@@ -208,40 +262,70 @@ export default {
       }, 60 * 30 * 1000)
 
       this.listenEvent()
-      this.initData()
+      asyncTask.push(this.initData())
+      asyncTask.push(this.initUserApi())
       this.globalObj.apiSource = this.setting.apiSource
-      this.globalObj.qualityList = music.supportQuality[this.setting.apiSource]
+      if (/^user_api/.test(this.setting.apiSource)) {
+        rendererInvoke(NAMES.mainWindow.set_user_api, this.setting.apiSource)
+      } else {
+        this.globalObj.qualityList = music.supportQuality[this.setting.apiSource]
+      }
       this.globalObj.proxy = Object.assign({}, this.setting.network.proxy)
       window.globalObj = this.globalObj
 
       // 初始化音乐sdk
-      music.init()
+      asyncTask.push(music.init())
+      Promise.all(asyncTask).then(() => {
+        this.handleInitEnvParamSearch()
+        this.handleInitEnvParamPlay()
+      })
     },
     enableIgnoreMouseEvents() {
-      if (this.isNt) return
+      if (this.isDT) return
       rendererSend(NAMES.mainWindow.set_ignore_mouse_events, false)
       // console.log('content enable')
     },
     dieableIgnoreMouseEvents() {
-      if (this.isNt) return
+      if (this.isDT) return
       // console.log('content disable')
       rendererSend(NAMES.mainWindow.set_ignore_mouse_events, true)
     },
 
     initData() { // 初始化数据
-      this.initPlayList() // 初始化播放列表
-      this.initDownloadList() // 初始化下载列表
+      return Promise.all([
+        this.initMyList(), // 初始化播放列表
+        this.initSearchHistoryList(), // 初始化搜索历史列表
+      ])
+      // this.initDownloadList() // 初始化下载列表
     },
-    initPlayList() {
-      let defaultList = window.electronStore_list.get('defaultList') || this.defaultList
-      let loveList = window.electronStore_list.get('loveList') || this.loveList
-      let userList = window.electronStore_list.get('userList') || this.userList
-      if (!defaultList.list) defaultList.list = []
-      if (!loveList.list) loveList.list = []
-      this.initList({ defaultList, loveList, userList })
+    initMyList() {
+      return getPlayList().then(({ defaultList, loveList, userList, downloadList }) => {
+        if (!defaultList) defaultList = this.defaultList
+        if (!loveList) loveList = this.loveList
+        if (userList) {
+          let needSave = false
+          const getListId = id => id.includes('.') ? getListId(id.substring(0, id.lastIndexOf('_'))) : id
+          userList.forEach(l => {
+            if (!l.id.includes('__') || l.source) return
+            let [source, id] = l.id.split('__')
+            id = getListId(id)
+            l.source = source
+            l.sourceListId = id
+            if (!needSave) needSave = true
+          })
+          if (needSave) this.saveMyList({ userList })
+        } else {
+          userList = this.userList
+        }
+
+        if (!defaultList.list) defaultList.list = []
+        if (!loveList.list) loveList.list = []
+        this.initList({ defaultList, loveList, userList })
+        this.initDownloadList(downloadList) // 初始化下载列表
+        this.initPlayInfo()
+      })
     },
-    initDownloadList() {
-      let downloadList = window.electronStore_list.get('downloadList')
+    initDownloadList(downloadList) {
       if (downloadList) {
         downloadList.forEach(item => {
           if (item.status == this.downloadStatus.RUN || item.status == this.downloadStatus.WAITING) {
@@ -251,6 +335,105 @@ export default {
         })
         this.updateDownloadList(downloadList)
       }
+    },
+    initSearchHistoryList() {
+      rendererInvoke(NAMES.mainWindow.get_data, 'searchHistoryList').then(historyList => {
+        if (historyList == null) {
+          historyList = []
+          rendererSend(NAMES.mainWindow.save_data, { path: 'searchHistoryList', data: historyList })
+        } else {
+          this.setSearchHistoryList(historyList)
+        }
+      })
+    },
+    initPlayInfo() {
+      rendererInvoke(NAMES.mainWindow.get_data, 'playInfo').then(info => {
+        // console.log(info, window.allList)
+        window.restorePlayInfo = null
+        if (!info) return
+        if (info.index < 0) return
+        if (info.listId) {
+          const list = window.allList[info.listId]
+          // console.log(list)
+          if (!list) return
+          info.list = list.list
+        }
+
+        window.restorePlayInfo = info
+        this.setPlayList({
+          list: {
+            list: info.list,
+            id: info.listId,
+          },
+          index: info.index,
+        })
+      })
+    },
+    initUserApi() {
+      return Promise.all([
+        rendererOn(NAMES.mainWindow.user_api_status, (event, { status, message, apiInfo }) => {
+          // console.log(apiInfo)
+          this.globalObj.userApi.status = status
+          this.globalObj.userApi.message = message
+          if (status) {
+            if (apiInfo.id === this.setting.apiSource) {
+              let apis = {}
+              let qualitys = {}
+              for (const [source, { actions, type, qualitys: sourceQualitys }] of Object.entries(apiInfo.sources)) {
+                if (type != 'music') continue
+                apis[source] = {}
+                for (const action of actions) {
+                  switch (action) {
+                    case 'musicUrl':
+                      apis[source].getMusicUrl = (songInfo, type) => {
+                        const requestKey = `request__${Math.random().toString().substring(2)}`
+                        return {
+                          canceleFn() {
+                            rendererInvoke(NAMES.mainWindow.request_user_api_cancel, requestKey)
+                          },
+                          promise: rendererInvoke(NAMES.mainWindow.request_user_api, {
+                            requestKey,
+                            data: {
+                              source: source,
+                              action: 'musicUrl',
+                              info: {
+                                type,
+                                musicInfo: songInfo,
+                              },
+                            },
+                          }).then(res => {
+                            // console.log(res)
+                            if (!/^https?:/.test(res.data.url)) return Promise.reject(new Error('Get url failed'))
+                            return { type, url: res.data.url }
+                          }).catch(err => {
+                            console.log(err.message)
+                            return Promise.reject(err)
+                          }),
+                        }
+                      }
+                      break
+
+                    default:
+                      break
+                  }
+                }
+                qualitys[source] = sourceQualitys
+              }
+              this.globalObj.qualityList = qualitys
+              this.globalObj.userApi.apis = apis
+            }
+          }
+        }),
+        rendererInvoke(NAMES.mainWindow.get_user_api_list).then(res => {
+          // console.log(res)
+          if (![...apiSourceInfo.map(s => s.id), ...res.map(s => s.id)].includes(this.setting.apiSource)) {
+            console.warn('reset api')
+            let api = apiSourceInfo.find(api => !api.disabled)
+            if (api) this.globalObj.apiSource = api.id
+          }
+          this.globalObj.userApi.list = res
+        }),
+      ])
     },
     showUpdateModal() {
       (this.version.newVersion && this.version.newVersion.history
@@ -292,27 +475,100 @@ export default {
     },
     handleEnvParamsInit(envParams) {
       this.envParams = envParams
-      this.isNt = isLinux || this.envParams.nt
-      if (this.isNt) {
+      this.isDT = this.envParams.dt
+      if (this.isDT) {
         document.body.classList.remove('transparent')
-        document.body.classList.add('noTransparent')
+        document.body.classList.add('disableTransparent')
       }
-      if (this.isProd && !this.isNt) {
+      if (this.isProd && !this.isDT && !this.isLinux) {
         document.body.addEventListener('mouseenter', this.dieableIgnoreMouseEvents)
         document.body.addEventListener('mouseleave', this.enableIgnoreMouseEvents)
       }
+      this.handleInitEnvParamSearch()
+      this.handleInitEnvParamPlay()
+    },
+    // 处理启动参数 search
+    handleInitEnvParamSearch() {
+      if (this.envParams.search == null) return
+      this.$router.push({
+        path: 'search',
+        query: {
+          text: this.envParams.search,
+        },
+      })
+    },
+    // 处理启动参数 play
+    handleInitEnvParamPlay() {
+      if (this.envParams.play == null || typeof this.envParams.play != 'string') return
+      // -play="source=kw&link=链接、ID"
+      // -play="source=myList&name=名字"
+      // -play="source=myList&name=名字&index=位置"
+      const params = parseUrlParams(this.envParams.play)
+      if (params.type != 'songList') return
+      this.handlePlaySongList(params)
+    },
+    handlePlaySongList(params) {
+      switch (params.source) {
+        case 'myList':
+          if (params.name != null) {
+            let targetList
+            const lists = Object.values(window.allList)
+            for (const list of lists) {
+              if (list.name === params.name) {
+                targetList = list
+                break
+              }
+            }
+            if (!targetList) return
 
-      if (this.envParams.search != null) {
-        this.$router.push({
-          path: 'search',
-          query: {
-            text: this.envParams.search,
-          },
-        })
+
+            this.setPlayList({
+              list: {
+                list: targetList.list,
+                id: targetList.id,
+              },
+              index: this.getListPlayIndex(targetList.list, params.index),
+            })
+          }
+          break
+        case 'kw':
+        case 'kg':
+        case 'tx':
+        case 'mg':
+        case 'wy':
+          this.playSongListDetail(params.source, params.link, params.index)
+          break
       }
     },
-    handleXMVerifyModalClose() {
-      music.xm.closeVerifyModal()
+    async playSongListDetail(source, link, playIndex) {
+      if (link == null) return
+      let list
+      try {
+        list = await this.getListDetailAll({ source, id: decodeURIComponent(link) })
+      } catch (err) {
+        console.log(err)
+      }
+      this.setPlayList({
+        list: {
+          list,
+          id: null,
+        },
+        index: this.getListPlayIndex(list, playIndex),
+      })
+    },
+    getListPlayIndex(list, index) {
+      if (index == null) {
+        index = 1
+      } else {
+        index = parseInt(index)
+        if (Number.isNaN(index)) {
+          index = 1
+        } else {
+          if (index < 1) index = 1
+          else if (index > list.length) index = list.length
+        }
+      }
+      return index - 1
     },
     listenEvent() {
       window.eventHub.$on('key_escape_down', this.handle_key_esc_down)
@@ -354,6 +610,11 @@ body {
   box-sizing: border-box;
 }
 
+.disableAnimation * {
+  transition: none !important;
+  animation: none !important;
+}
+
 .transparent {
   padding: @shadow-app;
   #container {
@@ -362,8 +623,17 @@ body {
     background-color: transparent;
   }
 }
-.noTransparent {
+.disableTransparent {
   background-color: #fff;
+
+  #right {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  #view { // 偏移5px距离解决非透明模式下右侧滚动条无法拖动的问题
+    margin-right: 5Px;
+  }
 }
 
 #container {

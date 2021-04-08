@@ -1,6 +1,6 @@
 <template lang="pug">
 div(:class="$style.player")
-  div(:class="$style.left" @contextmenu="handleToMusicLocation" @click="showPlayerDetail")
+  div(:class="$style.left" @contextmenu="handleToMusicLocation" @click="showPlayerDetail" :tips="$t('core.player.pic_tip')")
     img(v-if="musicInfo.img" :src="musicInfo.img" @error="imgError")
     svg(v-else version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='102%' width='100%' viewBox='0 0 60 60' space='preserve')
       use(:xlink:href='`#${$style.iconPic}`')
@@ -8,13 +8,33 @@ div(:class="$style.player")
     div(:class="$style.middleContainer" v-if="!isShowPlayerDetail")
       div(:class="$style.column1")
         div(:class="$style.container")
-          div(:class="$style.title" @click="handleCopy(title)" :title="title + $t('core.player.copy_title')") {{title}}
-          div(:class="$style.volumeContent")
-            div(:class="$style.volume")
-              div(:class="$style.volumeBar" :style="{ transform: `scaleX(${volume || 0})` }")
-            div(:class="$style.volumeMask" @mousedown="handleVolumeMsDown" ref="dom_volumeMask" :title="`${$t('core.player.volume')}${parseInt(volume * 100)}%`")
+          div(:class="$style.title" @click="handleCopy(title)" :tips="title + $t('core.player.copy_title')") {{title}}
+          div(:class="$style.controlBtn")
 
-          //- div(:class="$style.playBtn" @click='handleNext' title="音量")
+            div(:class="$style.volumeContent")
+              div(:class="[$style.volume, setting.player.isMute ? $style.muted : null]")
+                div(:class="$style.volumeBar" :style="{ transform: `scaleX(${volume || 0})` }")
+              div(:class="$style.volumeMask" @mousedown="handleVolumeMsDown" ref="dom_volumeMask" :tips="`${$t('core.player.volume')}${parseInt(volume * 100)}%`")
+            div(:class="$style.titleBtn" @click='toggleDesktopLyric' @contextmenu="handleToggleLockDesktopLyric" :tips="toggleDesktopLyricBtnTitle")
+              svg(v-if="setting.desktopLyric.enable" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 512 512' space='preserve')
+                use(xlink:href='#icon-desktop-lyric-on')
+              svg(v-else version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 512 512' space='preserve')
+                use(xlink:href='#icon-desktop-lyric-off')
+            div(:class="$style.titleBtn" @click='toggleNextPlayMode' :tips="nextTogglePlayName")
+              svg(v-if="setting.player.togglePlayMethod == 'listLoop'" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='80%' viewBox='0 0 24 24' space='preserve')
+                use(xlink:href='#icon-list-loop')
+              svg(v-else-if="setting.player.togglePlayMethod == 'random'" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='100%' viewBox='0 0 24 24' space='preserve')
+                use(xlink:href='#icon-list-random')
+              svg(v-else-if="setting.player.togglePlayMethod == 'list'" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='120%' viewBox='0 0 24 24' space='preserve')
+                use(xlink:href='#icon-list-order')
+              svg(v-else-if="setting.player.togglePlayMethod == 'singleLoop'" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='100%' viewBox='0 0 24 24' space='preserve')
+                use(xlink:href='#icon-single-loop')
+              svg(v-else version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='120%' viewBox='0 0 24 24' space='preserve')
+                use(xlink:href='#icon-single')
+            div(:class="$style.titleBtn" @click='addMusicTo' :tips="$t('core.player.add_music_to')")
+              svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='80%' viewBox='0 0 512 512' space='preserve')
+                use(xlink:href='#icon-add-2')
+          //- div(:class="$style.playBtn" @click='playNext' tips="音量")
             svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 291.063 291.064' space='preserve')
               use(xlink:href='#icon-sound')
 
@@ -29,24 +49,28 @@ div(:class="$style.player")
         span(style="margin: 0 5px;") /
         span {{maxPlayTimeStr}}
   div(:class="$style.right")
-    div(:class="$style.playBtn" @click='handlePrev' :title="$t('core.player.next')" style="transform: rotate(180deg);")
+    div(:class="$style.playBtn" @click='playPrev' :tips="$t('core.player.prev')" style="transform: rotate(180deg);")
       svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 220.847 220.847' space='preserve')
         use(xlink:href='#icon-nextMusic')
-    div(:class="$style.playBtn" :title="isPlay ? $t('core.player.pause') : $t('core.player.play')" @click='togglePlay')
+    div(:class="$style.playBtn" :tips="isPlay ? $t('core.player.pause') : $t('core.player.play')" @click='togglePlay')
       svg(v-if="isPlay" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 277.338 277.338' space='preserve')
         use(xlink:href='#icon-pause')
       svg(v-else version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 170 170' space='preserve')
         use(xlink:href='#icon-play')
-    div(:class="$style.playBtn" @click='handleNext' :title="$t('core.player.next')")
+    div(:class="$style.playBtn" @click='playNext' :tips="$t('core.player.next')")
       svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 220.847 220.847' space='preserve')
         use(xlink:href='#icon-nextMusic')
   //- transition(enter-active-class="animated lightSpeedIn"
   transition(enter-active-class="animated lightSpeedIn"
       leave-active-class="animated slideOutDown")
-    core-player-detail(v-if="isShowPlayerDetail" :musicInfo="musicInfo"
+    core-player-detail(v-if="isShowPlayerDetail" :musicInfo="listId == 'download' ? targetSong.musicInfo : targetSong"
                       :lyric="lyric" :list="list" :listId="listId"
                       :playInfo="{ nowPlayTimeStr, maxPlayTimeStr, progress, nowPlayTime, status }"
-                      :isPlay="isPlay" @action="handlePlayDetailAction")
+                      :isPlay="isPlay" @action="handlePlayDetailAction"
+                      :nextTogglePlayName="nextTogglePlayName"
+                      @toggle-next-play-mode="toggleNextPlayMode" @add-music-to="addMusicTo")
+
+  material-list-add-modal(:show="isShowAddMusicTo" :musicInfo="listId == 'download' ? targetSong.musicInfo : targetSong" @close="isShowAddMusicTo = false")
   svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' style="display: none;")
     defs
       g(:id="$style.iconPic")
@@ -61,21 +85,26 @@ div(:class="$style.player")
 </template>
 
 <script>
-import Lyric from 'lrc-file-parser'
+import Lyric from '@renderer/utils/lyric-font-player'
 import { rendererSend, rendererOn, NAMES } from '../../../common/ipc'
-import { formatPlayTime2, getRandom, checkPath, setTitle, clipboardWriteText, debounce, assertApiSupport } from '../../utils'
+import { formatPlayTime2, getRandom, checkPath, setTitle, clipboardWriteText, debounce, throttle, assertApiSupport } from '../../utils'
 import { mapGetters, mapActions, mapMutations } from 'vuex'
 import { requestMsg } from '../../utils/message'
-import { isMac } from '../../../common/utils'
 import { player as eventPlayerNames } from '../../../common/hotKey'
 import path from 'path'
 
 let audio
 
+const playNextModes = [
+  'listLoop',
+  'random',
+  'list',
+  'singleLoop',
+]
+
 export default {
   data() {
     return {
-      show: true,
       volume: 0,
       nowPlayTime: 0,
       maxPlayTime: 0,
@@ -91,7 +120,6 @@ export default {
         singer: '',
         album: '',
       },
-      targetSong: null,
       pregessWidth: 0,
       lyric: {
         lines: [],
@@ -99,9 +127,8 @@ export default {
         line: 0,
       },
       delayNextTimeout: null,
-      audioErrorTime: 0,
+      restorePlayTime: 0,
       retryNum: 0,
-      isMac,
       volumeEvent: {
         isMsDown: false,
         msDownX: 0,
@@ -112,14 +139,24 @@ export default {
         timeout: null,
         playTime: 0,
       },
+      isShowAddMusicTo: false,
     }
   },
   computed: {
     ...mapGetters(['setting']),
-    ...mapGetters('player', ['list', 'playIndex', 'changePlay', 'listId', 'isShowPlayerDetail']),
+    ...mapGetters('player', ['list', 'changePlay', 'playMusicInfo', 'isShowPlayerDetail', 'playInfo', 'playedList']),
     // pic() {
     //   return this.musicInfo.img ? this.musicInfo.img : ''
     // },
+    listId() { // 当前播放歌曲的列表ID
+      return this.playInfo.listId
+    },
+    playIndex() { // 当前播放歌曲所在列表的 播放列表的播放位置
+      return this.playInfo.playIndex
+    },
+    targetSong() {
+      return this.playInfo.musicInfo
+    },
     title() {
       return this.musicInfo.name
         ? this.setting.download.fileName.replace('歌名', this.musicInfo.name).replace('歌手', this.musicInfo.singer)
@@ -134,6 +171,26 @@ export default {
     progress() {
       return this.nowPlayTime / this.maxPlayTime || 0
     },
+    nextTogglePlayName() {
+      switch (this.setting.player.togglePlayMethod) {
+        case 'listLoop': return this.$t('core.player.play_toggle_mode_list_loop')
+        case 'random': return this.$t('core.player.play_toggle_mode_random')
+        case 'singleLoop': return this.$t('core.player.play_toggle_mode_single_loop')
+        case 'list': return this.$t('core.player.play_toggle_mode_list')
+        default: return this.$t('core.player.play_toggle_mode_off')
+      }
+    },
+    toggleDesktopLyricBtnTitle() {
+      return `${
+        this.setting.desktopLyric.enable
+          ? this.$t('core.player.desktop_lyric_off')
+          : this.$t('core.player.desktop_lyric_on')
+      }（${
+        this.setting.desktopLyric.isLock
+          ? this.$t('core.player.desktop_lyric_unlock')
+          : this.$t('core.player.desktop_lyric_lock')
+      }）`
+    },
   },
   mounted() {
     this.init()
@@ -143,6 +200,12 @@ export default {
     this.handleSaveVolume = debounce(volume => {
       this.setVolume(volume)
     }, 300)
+    this.savePlayInfo = throttle(n => {
+      rendererSend(NAMES.mainWindow.save_data, {
+        path: 'playInfo',
+        data: n,
+      })
+    }, 2000)
 
     rendererOn(NAMES.mainWindow.get_lyric_info, (event, info) => {
       switch (info.action) {
@@ -152,7 +215,9 @@ export default {
             singer: this.musicInfo.singer,
             name: this.musicInfo.name,
             album: this.musicInfo.album,
-            lyric: this.musicInfo.lrc,
+            lrc: this.musicInfo.lrc,
+            tlrc: this.musicInfo.tlrc,
+            lxlrc: this.musicInfo.lxlrc,
             isPlay: this.isPlay,
             line: this.lyric.line,
             played_time: audio.currentTime * 1000,
@@ -185,21 +250,33 @@ export default {
   watch: {
     changePlay(n) {
       if (!n) return
+      this.resetChangePlay()
+      if (window.restorePlayInfo) {
+        this.handleRestorePlay(window.restorePlayInfo)
+        window.restorePlayInfo = null
+        return
+      }
       // console.log('changePlay')
       this.handleRemoveMusic()
-      this.resetChangePlay()
-      if (this.playIndex < 0) return
-      this.stopPlay()
+      if (!this.playInfo.musicInfo) return
       this.play()
     },
     'setting.player.togglePlayMethod'(n) {
       audio.loop = n === 'singleLoop'
+      if (this.playedList.length) this.clearPlayedList()
+      if (n == 'random') this.setPlayedList(this.playMusicInfo)
     },
     'setting.player.isMute'(n) {
       audio.muted = n
     },
     'setting.player.mediaDeviceId'(n) {
       this.setMediaDevice()
+    },
+    'setting.player.isShowLyricTransition'() {
+      this.setLyric()
+    },
+    'setting.player.isPlayLxlrc'() {
+      this.setLyric()
     },
     async list(n, o) {
       if (n === o && this.musicInfo.songmid) {
@@ -209,13 +286,13 @@ export default {
         if (index < 0) {
           // console.log(this.playIndex)
           if (n.length) {
-            this.fixPlayIndex(this.playIndex - 1)
-            this.handleNext()
+            this.setPlayIndex(this.playInfo.listPlayIndex - 1)
+            this.playNext()
           } else {
-            this.setPlayIndex(-1)
+            this.setPlayMusicInfo(null)
           }
         } else {
-          this.fixPlayIndex(index)
+          this.setPlayIndex(index)
         }
         // console.log(this.playIndex)
       }
@@ -229,25 +306,48 @@ export default {
     },
     nowPlayTime(n, o) {
       if (Math.abs(n - o) > 2) this.isActiveTransition = true
+      if (this.setting.player.isSavePlayTime && !this.playInfo.isTempPlay) {
+        this.savePlayInfo({
+          time: n,
+          maxTime: this.maxPlayTime,
+          listId: this.listId,
+          list: this.listId == null ? this.list : null,
+          index: this.playIndex,
+        })
+      }
+    },
+    maxPlayTime(maxPlayTime) {
+      if (!this.playInfo.isTempPlay) {
+        this.savePlayInfo({
+          time: this.nowPlayTime,
+          maxTime: maxPlayTime,
+          listId: this.listId,
+          list: this.listId == null ? this.list : null,
+          index: this.playIndex,
+        })
+      }
     },
   },
   methods: {
-    ...mapActions('player', ['getUrl', 'getPic', 'getLrc']),
+    ...mapActions('player', ['getUrl', 'getPic', 'getLrc', 'playPrev', 'playNext']),
+    ...mapActions('list', ['getOtherSource']),
     ...mapMutations('player', [
+      'setPlayMusicInfo',
       'setPlayIndex',
-      'fixPlayIndex',
       'resetChangePlay',
       'visiblePlayerDetail',
+      'clearPlayedList',
+      'setPlayedList',
     ]),
-    ...mapMutations(['setVolume']),
+    ...mapMutations(['setVolume', 'setPlayNextMode', 'setVisibleDesktopLyric', 'setLockDesktopLyric']),
     ...mapMutations('list', ['updateMusicInfo']),
     ...mapMutations(['setMediaDeviceId']),
     handleRegisterEvent(action) {
       let eventHub = window.eventHub
       let name = action == 'on' ? '$on' : '$off'
       eventHub[name](eventPlayerNames.toggle_play.action, this.togglePlay)
-      eventHub[name](eventPlayerNames.next.action, this.handleNext)
-      eventHub[name](eventPlayerNames.prev.action, this.handlePrev)
+      eventHub[name](eventPlayerNames.next.action, this.playNext)
+      eventHub[name](eventPlayerNames.prev.action, this.playPrev)
       eventHub[name](eventPlayerNames.volume_up.action, this.handleSetVolumeUp)
       eventHub[name](eventPlayerNames.volume_down.action, this.handleSetVolumeDown)
       eventHub[name](eventPlayerNames.volume_mute.action, this.handleSetVolumeMute)
@@ -278,18 +378,19 @@ export default {
         console.log('播放完毕')
         this.stopPlay()
         this.status = this.statusText = this.$t('core.player.end')
-        this.handleNext()
+        this.playNext()
       })
       audio.addEventListener('error', () => {
         // console.log('code', audio.error)
         if (!this.musicInfo.songmid) return
         console.log('出错')
         this.stopPlay()
+        this.clearLoadingTimeout()
         if (this.listId != 'download' && audio.error.code !== 1 && this.retryNum < 2) { // 若音频URL无效则尝试刷新2次URL
           // console.log(this.retryNum)
-          if (!this.audioErrorTime) this.audioErrorTime = audio.currentTime // 记录出错的播放时间
+          if (!this.restorePlayTime) this.restorePlayTime = audio.currentTime // 记录出错的播放时间
           this.retryNum++
-          this.setUrl(this.list[this.playIndex], true)
+          this.setUrl(this.targetSong, true)
           this.status = this.statusText = this.$t('core.player.refresh_url')
           return
         }
@@ -299,15 +400,21 @@ export default {
         this.addDelayNextTimeout()
       })
       audio.addEventListener('loadeddata', () => {
-        this.maxPlayTime = audio.duration
-        if (this.audioErrorTime) {
-          audio.currentTime = this.audioErrorTime
-          this.audioErrorTime = 0
-        }
-        if (!this.targetSong.interval && this.listId != 'download') this.updateMusicInfo({ id: this.listId, index: this.playIndex, data: { interval: formatPlayTime2(this.maxPlayTime) } })
+        console.log('loadeddata')
+        this.clearLoadingTimeout()
         this.status = this.statusText = this.$t('core.player.loading')
+        this.maxPlayTime = audio.duration
+        if (this.restorePlayTime) {
+          audio.currentTime = this.restorePlayTime
+          this.restorePlayTime = 0
+        }
+        if (!this.targetSong.interval && this.listId != 'download') {
+          this.updateMusicInfo({ id: this.listId, index: this.playIndex, data: { interval: formatPlayTime2(this.maxPlayTime) }, musicInfo: this.targetSong })
+        }
       })
       audio.addEventListener('loadstart', () => {
+        console.log('loadstart')
+        this.startLoadingTimeout()
         this.status = this.statusText = this.$t('core.player.loading')
       })
       audio.addEventListener('canplay', () => {
@@ -317,11 +424,10 @@ export default {
           this.mediaBuffer.playTime = 0
           audio.currentTime = playTime
         }
-        if (this.mediaBuffer.timeout) {
-          this.clearBufferTimeout()
-        }
+        this.clearBufferTimeout()
+
         // if (this.musicInfo.lrc) window.lrc.play(audio.currentTime * 1000)
-        this.status = this.statusText = this.$t('core.player.loading')
+        this.status = this.statusText = ''
       })
       // audio.addEventListener('canplaythrough', () => {
       //   console.log('音乐加载完毕')
@@ -330,6 +436,7 @@ export default {
       // })
       audio.addEventListener('emptied', () => {
         this.mediaBuffer.playTime = 0
+        this.clearLoadingTimeout()
         this.clearBufferTimeout()
 
         // console.log('媒介资源元素突然为空，网络错误 or 切换歌曲？')
@@ -349,6 +456,10 @@ export default {
       })
 
       window.lrc = new Lyric({
+        lineClassName: 'lrc-content',
+        fontClassName: 'font',
+        shadowContent: false,
+        activeLineClassName: 'active',
         onPlay: (line, text) => {
           this.lyric.text = text
           this.lyric.line = line
@@ -360,23 +471,25 @@ export default {
           this.lyric.lines = lines
           this.lyric.line = 0
         },
-        offset: 100,
+        // offset: 80,
       })
 
       this.handleRegisterEvent('on')
     },
     async play() {
-      console.log('play', this.playIndex)
-      this.checkDelayNextTimeout()
-      let targetSong = this.targetSong = this.list[this.playIndex]
+      this.clearDelayNextTimeout()
+
+      const targetSong = this.targetSong
+
+      if (this.setting.player.togglePlayMethod == 'random') this.setPlayedList(this.playMusicInfo)
       this.retryNum = 0
-      this.audioErrorTime = 0
+      this.restorePlayTime = 0
 
       if (this.listId == 'download') {
         const filePath = path.join(this.setting.download.savePath, targetSong.fileName)
         // console.log(filePath)
         if (!await checkPath(filePath) || !targetSong.isComplate || /\.ape$/.test(filePath)) {
-          return this.list.length == 1 ? null : this.handleNext()
+          return this.list.length == 1 ? null : this.playNext()
         }
         this.musicInfo.songmid = targetSong.musicInfo.songmid
         this.musicInfo.singer = targetSong.musicInfo.singer
@@ -387,7 +500,7 @@ export default {
         this.setImg(targetSong.musicInfo)
         this.setLrc(targetSong.musicInfo)
       } else {
-        if (!this.assertApiSupport(targetSong.source)) return this.handleNext()
+        // if (!this.assertApiSupport(targetSong.source)) return this.playNext()
         this.musicInfo.songmid = targetSong.songmid
         this.musicInfo.singer = targetSong.singer
         this.musicInfo.name = targetSong.name
@@ -402,8 +515,17 @@ export default {
         name: this.musicInfo.name,
         album: this.musicInfo.album,
       })
+      if (!this.playInfo.isTempPlay) {
+        this.savePlayInfo({
+          time: this.nowPlayTime,
+          maxTime: this.maxPlayTime,
+          listId: this.listId,
+          list: this.listId == null ? this.list : null,
+          index: this.playIndex,
+        })
+      }
     },
-    checkDelayNextTimeout() {
+    clearDelayNextTimeout() {
       // console.log(this.delayNextTimeout)
       if (this.delayNextTimeout) {
         clearTimeout(this.delayNextTimeout)
@@ -411,72 +533,13 @@ export default {
       }
     },
     addDelayNextTimeout() {
-      this.checkDelayNextTimeout()
+      this.clearDelayNextTimeout()
       this.delayNextTimeout = setTimeout(() => {
         this.delayNextTimeout = null
-        this.handleNext()
+        this.playNext()
       }, 5000)
     },
-    async filterList() {
-      // if (this.list.listName === null) return
-      let list
-      if (this.listId == 'download') {
-        list = []
-        for (const item of this.list) {
-          const filePath = path.join(this.setting.download.savePath, item.fileName)
-          if (!await checkPath(filePath) || !item.isComplate || /\.ape$/.test(filePath)) continue
-          list.push(item)
-        }
-      } else {
-        list = this.list.filter(s => this.assertApiSupport(s.source))
-      }
-      return list
-    },
-    async handlePrev() {
-      // console.log(playIndex)
-      let list = await this.filterList()
-      if (!list.length) return this.setPlayIndex(-1)
-      let playIndex = list.indexOf(this.list[this.playIndex])
-      let index
-      switch (this.setting.player.togglePlayMethod) {
-        case 'random':
-          index = this.hanldeListRandom(list, playIndex)
-          break
-        case 'listLoop':
-        case 'list':
-          index = playIndex === 0 ? list.length - 1 : playIndex - 1
-          break
-        default:
-          return
-      }
-      if (index < 0) return
-      index = this.list.indexOf(list[index])
-      this.setPlayIndex(index)
-    },
-    async handleNext() {
-      // if (this.list.listName === null) return
-      let list = await this.filterList()
-      if (!list.length) return this.setPlayIndex(-1)
-      let playIndex = list.indexOf(this.list[this.playIndex])
-      // console.log(playIndex)
-      let index
-      switch (this.setting.player.togglePlayMethod) {
-        case 'listLoop':
-          index = playIndex === list.length - 1 ? 0 : playIndex + 1
-          break
-        case 'random':
-          index = this.hanldeListRandom(list, playIndex)
-          break
-        case 'list':
-          index = playIndex === list.length - 1 ? -1 : playIndex + 1
-          break
-        default:
-          return
-      }
-      if (index < 0) return
-      index = this.list.indexOf(list[index])
-      this.setPlayIndex(index)
-    },
+
     hanldeListRandom(list, index) {
       return getRandom(0, list.length)
     },
@@ -500,7 +563,7 @@ export default {
     setProgress(pregress) {
       if (!audio.src) return
       const time = pregress * this.maxPlayTime
-      if (this.audioErrorTime) this.audioErrorTime = time
+      if (this.restorePlayTime) this.restorePlayTime = time
       if (this.mediaBuffer.playTime) {
         this.clearBufferTimeout()
         this.mediaBuffer.playTime = time
@@ -516,7 +579,13 @@ export default {
       )
     },
     togglePlay() {
-      if (!audio.src) return
+      if (!audio.src) {
+        if (this.restorePlayTime != null) {
+          // if (!this.assertApiSupport(this.targetSong.source)) return this.playNext()
+          this.setUrl(this.targetSong)
+        }
+        return
+      }
       if (this.isPlay) {
         audio.pause()
         this.clearBufferTimeout()
@@ -534,20 +603,37 @@ export default {
       if (highQuality && songInfo._types['320k'] && list && list.includes('320k')) type = '320k'
       return type
     },
-    setUrl(targetSong, isRefresh, isRetryed = false) {
+    setUrl(targetSong, isRefresh, isRetryed = false, retryedSource = [], originMusic = null) {
+      if (!retryedSource.includes(targetSong.source)) retryedSource.push(targetSong.source)
+
       let type = this.getPlayType(this.setting.player.highQuality, targetSong)
       this.musicInfo.url = targetSong.typeUrl[type]
       this.status = this.statusText = this.$t('core.player.geting_url')
 
-      return this.getUrl({ musicInfo: targetSong, type, isRefresh }).then(() => {
-        audio.src = this.musicInfo.url = targetSong.typeUrl[type]
+      return this.getUrl({ musicInfo: targetSong, originMusic, type, isRefresh }).then(url => {
+        if ((targetSong !== this.targetSong && originMusic !== this.targetSong) || this.isPlay) return
+        audio.src = this.musicInfo.url = url
       }).catch(err => {
         // console.log('err', err.message)
         if (err.message == requestMsg.cancelRequest) return
-        if (!isRetryed) return this.setUrl(targetSong, isRefresh, true)
-        this.status = this.statusText = err.message
-        this.addDelayNextTimeout()
-        return Promise.reject(err)
+        if (!isRetryed) return this.setUrl(targetSong, isRefresh, true, retryedSource, originMusic)
+        if (!originMusic) originMusic = targetSong
+
+        this.status = this.statusText = 'Try toggle source...'
+
+        return this.getOtherSource(originMusic).then(otherSource => {
+          console.log('find otherSource', otherSource)
+          if (otherSource.length) {
+            for (const item of otherSource) {
+              if (retryedSource.includes(item.source) || !this.assertApiSupport(item.source)) continue
+              console.log('try toggle to: ', item.source, item.name, item.singer, item.interval)
+              return this.setUrl(item, isRefresh, false, retryedSource, originMusic)
+            }
+          }
+          this.status = this.statusText = err.message
+          this.addDelayNextTimeout()
+          return Promise.reject(err)
+        })
       })
     },
     setImg(targetSong) {
@@ -560,27 +646,16 @@ export default {
       }
     },
     setLrc(targetSong) {
-      this.musicInfo.lrc = targetSong.lrc
-
-      let lrcP = this.musicInfo.lrc
-        ? Promise.resolve()
-        : this.getLrc(targetSong).then(() => {
-          this.musicInfo.lrc = targetSong.lrc
-        })
-
-      lrcP
-        .then(() => {
-          window.lrc.setLyric(this.musicInfo.lrc)
-          this.handleUpdateWinLyricInfo('lyric', this.musicInfo.lrc)
-          if (this.isPlay && (this.musicInfo.url || this.listId == 'download')) {
-            window.lrc.play(audio.currentTime * 1000)
-            this.handleUpdateWinLyricInfo('play', audio.currentTime * 1000)
-          }
-        })
-        .catch(() => {
-          this.handleUpdateWinLyricInfo('lyric', this.musicInfo.lrc)
-          this.status = this.statusText = this.$t('core.player.lyric_error')
-        })
+      this.getLrc(targetSong).then(() => {
+        this.musicInfo.lrc = targetSong.lrc
+        this.musicInfo.tlrc = targetSong.tlrc
+        this.musicInfo.lxlrc = targetSong.lxlrc
+      }).catch(() => {
+        this.status = this.statusText = this.$t('core.player.lyric_error')
+      }).finally(() => {
+        this.handleUpdateWinLyricInfo('lyric', { lrc: this.musicInfo.lrc, tlrc: this.musicInfo.tlrc, lxlrc: this.musicInfo.lxlrc })
+        this.setLyric()
+      })
     },
     handleRemoveMusic() {
       this.stopPlay()
@@ -591,6 +666,8 @@ export default {
       this.status = this.musicInfo.name = this.musicInfo.singer = ''
       this.musicInfo.songmid = null
       this.musicInfo.lrc = null
+      this.musicInfo.tlrc = null
+      this.musicInfo.lxlrc = null
       this.musicInfo.url = null
       this.nowPlayTime = 0
       this.maxPlayTime = 0
@@ -623,8 +700,9 @@ export default {
 
       this.volume = val
       this.volumeEvent.msDownVolume = val
-      // console.log(val)
       if (audio) audio.volume = this.volume
+
+      if (this.setting.player.isMute) this.setVolume(false)
     },
     handleSetVolumeMute() {
       audio.muted = !audio.muted
@@ -654,22 +732,35 @@ export default {
       this.setProgressWidth()
     },
     handleToMusicLocation() {
-      if (this.listId == 'download') return
+      if (!this.listId || this.listId == '__temp__' || this.listId == 'download') return
       if (this.playIndex == -1) return
       this.$router.push({
         path: 'list',
         query: {
           id: this.listId,
-          scrollIndex: this.playIndex,
+          scrollIndex: this.playInfo.playIndex,
         },
       })
     },
     showPlayerDetail() {
+      if (!this.targetSong) return
       this.visiblePlayerDetail(true)
     },
     handleTransitionEnd(e) {
       // console.log(e)
       this.isActiveTransition = false
+    },
+    startLoadingTimeout() {
+      // console.log('start load timeout')
+      this.loadingTimeout = setTimeout(() => {
+        this.playNext()
+      }, 20000)
+    },
+    clearLoadingTimeout() {
+      if (!this.loadingTimeout) return
+      // console.log('clear load timeout')
+      clearTimeout(this.loadingTimeout)
+      this.loadingTimeout = null
     },
     startBuffering() {
       console.log('start t')
@@ -681,7 +772,7 @@ export default {
         if (skipTime > this.maxPlayTime) skipTime = (this.maxPlayTime - audio.currentTime) / 2
         if (skipTime - this.mediaBuffer.playTime < 1 || this.maxPlayTime - skipTime < 1) {
           this.mediaBuffer.playTime = 0
-          this.handleNext()
+          this.playNext()
           return
         }
         this.startBuffering()
@@ -741,13 +832,13 @@ export default {
     handlePlayDetailAction({ type, data }) {
       switch (type) {
         case 'prev':
-          this.handlePrev()
+          this.playPrev()
           break
         case 'togglePlay':
           this.togglePlay()
           break
         case 'next':
-          this.handleNext()
+          this.playNext()
           break
         case 'progress':
           this.setProgress(data)
@@ -765,6 +856,58 @@ export default {
         data,
         info,
       })
+    },
+    setLyric() {
+      window.lrc.setLyric(
+        this.setting.player.isPlayLxlrc && this.musicInfo.lxlrc ? this.musicInfo.lxlrc : this.musicInfo.lrc,
+        this.setting.player.isShowLyricTransition && this.musicInfo.tlrc ? this.musicInfo.tlrc : '',
+        // (
+        //   this.setting.player.isShowLyricTransition && this.musicInfo.tlrc
+        //     ? (this.musicInfo.tlrc + '\n')
+        //     : ''
+        // ) + (this.musicInfo.lrc || ''),
+      )
+      if (this.isPlay && (this.musicInfo.url || this.listId == 'download')) {
+        window.lrc.play(audio.currentTime * 1000)
+        this.handleUpdateWinLyricInfo('play', audio.currentTime * 1000)
+      }
+    },
+    toggleDesktopLyric() {
+      this.setVisibleDesktopLyric(!this.setting.desktopLyric.enable)
+    },
+    handleToggleLockDesktopLyric() {
+      this.setLockDesktopLyric(!this.setting.desktopLyric.isLock)
+    },
+    toggleNextPlayMode() {
+      let index = playNextModes.indexOf(this.setting.player.togglePlayMethod)
+      if (++index >= playNextModes.length) index = -1
+      this.setPlayNextMode(playNextModes[index] || '')
+    },
+    addMusicTo() {
+      if (!this.musicInfo.songmid) return
+      this.isShowAddMusicTo = true
+    },
+    handleRestorePlay(restorePlayInfo) {
+      let musicInfo = this.list[restorePlayInfo.index]
+      this.musicInfo.songmid = musicInfo.songmid
+      this.musicInfo.singer = musicInfo.singer
+      this.musicInfo.name = musicInfo.name
+      this.musicInfo.album = musicInfo.albumName
+      this.setImg(musicInfo)
+      this.setLrc(musicInfo)
+      this.nowPlayTime = this.restorePlayTime = restorePlayInfo.time
+      this.maxPlayTime = restorePlayInfo.maxTime || 0
+      this.handleUpdateWinLyricInfo('music_info', {
+        songmid: this.musicInfo.songmid,
+        singer: this.musicInfo.singer,
+        name: this.musicInfo.name,
+        album: this.musicInfo.album,
+      })
+      this.$nextTick(() => {
+        this.sendProgressEvent(this.progress, 'paused')
+      })
+
+      if (this.setting.player.togglePlayMethod == 'random') this.setPlayedList(this.playMusicInfo)
     },
   },
 }
@@ -855,17 +998,26 @@ export default {
 }
 
 .title {
-  flex: 1 1 0;
-  width: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   padding-right: 5px;
   font-size: 14px;
   line-height: 18px;
   .mixin-ellipsis-1;
 }
 
+.controlBtn {
+  flex: none;
+  display: flex;
+  flex-flow: row nowrap;
+}
+
+
 .volume-content {
+  flex: none;
   position: relative;
   width: 80px;
+  margin-right: 10px;
   display: flex;
   align-items: center;
   opacity: .5;
@@ -882,11 +1034,15 @@ export default {
   border-radius: 10px;
   // overflow: hidden;
   transition: @transition-theme;
-  transition-property: background-color;
+  transition-property: background-color, opacity;
   background-color: @color-player-progress-bar1;
   // background-color: #f5f5f5;
   position: relative;
   border-radius: @radius-progress-border;
+}
+
+.muted {
+  opacity: .5;
 }
 
 .volume-bar {
@@ -905,12 +1061,39 @@ export default {
   box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
 }
 
+
 .volume-mask {
   position: absolute;
   top: 0;
   width: 100%;
   height: 100%;
   cursor: pointer;
+}
+
+.titleBtn {
+  flex: none;
+  margin-left: 5px;
+  height: 100%;
+  width: 20px;
+  color: @color-theme;
+  display: flex;
+  flex-flow: column nowrap;
+  justify-content: center;
+  align-items: center;
+
+  transition: opacity 0.2s ease;
+  opacity: .5;
+  cursor: pointer;
+
+  svg {
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
+  }
+  &:hover {
+    opacity: 1;
+  }
+  &:active {
+    opacity: 1;
+  }
 }
 
 .play-btn {
@@ -997,6 +1180,7 @@ export default {
   display: flex;
   padding-top: 2px;
   // justify-content: space-between;
+  height: 16px;
   align-items: center;
 }
 
@@ -1040,6 +1224,9 @@ each(@themes, {
       // img {
       //   border-color: ~'@{color-@{value}-theme_2-background_1}';
       // }
+    }
+    .titleBtn {
+      color: ~'@{color-@{value}-theme}';
     }
     .play-btn {
       color: ~'@{color-@{value}-theme}';

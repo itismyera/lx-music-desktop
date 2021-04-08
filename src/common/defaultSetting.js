@@ -1,9 +1,8 @@
 const path = require('path')
 const os = require('os')
-const { isMac } = require('./utils')
 
 const defaultSetting = {
-  version: '1.0.34',
+  version: '1.0.40',
   player: {
     togglePlayMethod: 'listLoop',
     highQuality: false,
@@ -12,6 +11,9 @@ const defaultSetting = {
     isMute: false,
     mediaDeviceId: 'default',
     isMediaDeviceRemovedStopPlay: false,
+    isShowLyricTransition: false,
+    isPlayLxlrc: true,
+    isSavePlayTime: false,
   },
   desktopLyric: {
     enable: false,
@@ -22,6 +24,7 @@ const defaultSetting = {
     x: null,
     y: null,
     theme: 0,
+    isLockScreen: true,
     style: {
       fontSize: 120,
       opacity: 95,
@@ -86,10 +89,11 @@ const defaultSetting = {
   sourceId: 'kw',
   apiSource: 'temp',
   sourceNameType: 'alias',
+  isShowAnimation: true,
   randomAnimate: true,
   ignoreVersion: null,
   isAgreePact: false,
-  controlBtnPosition: isMac ? 'left' : 'right',
+  controlBtnPosition: process.platform === 'darwin' ? 'left' : 'right',
 }
 
 const overwriteSetting = {

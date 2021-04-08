@@ -1,4 +1,5 @@
 import fs from 'fs'
+import path from 'path'
 import { shell, clipboard } from 'electron'
 import crypto from 'crypto'
 import { rendererSend, rendererInvoke, NAMES } from '../../common/ipc'
@@ -17,6 +18,39 @@ export const sizeFormate = size => {
   let units = ['B', 'KB', 'MB', 'GB', 'TB']
   let number = Math.floor(Math.log(size) / Math.log(1024))
   return `${(size / Math.pow(1024, Math.floor(number))).toFixed(2)} ${units[number]}`
+}
+
+/**
+  * 日期格式化
+  * @param {*} date 时间
+  * @param {String} format 时间格式，默认YYYY-MM-DD hh:mm:ss
+  */
+export const dateFormat = (date = new Date(), format = 'YYYY-MM-DD hh:mm:ss') => {
+  if (typeof date != 'object') date = new Date(date)
+  const munFix = (n) => n < 10 ? ('0' + n) : n
+  return format
+    .replace('YYYY', date.getFullYear())
+    .replace('MM', munFix(date.getMonth() + 1))
+    .replace('DD', munFix(date.getDate()))
+    .replace('hh', munFix(date.getHours()))
+    .replace('mm', munFix(date.getMinutes()))
+    .replace('ss', munFix(date.getSeconds()))
+}
+
+/**
+ * 时间格式化
+ */
+export const dateFormat2 = time => {
+  let differ = parseInt((Date.now() - time) / 1000)
+  if (differ < 60) {
+    return window.i18n.t('base.date_format_second', { num: differ })
+  } else if (differ < 3600) {
+    return window.i18n.t('base.date_format_minute', { num: parseInt(differ / 60) })
+  } else if (differ < 86400) {
+    return window.i18n.t('base.date_format_hour', { num: parseInt(differ / 3600) })
+  } else {
+    return dateFormat(time)
+  }
 }
 
 export const formatPlayTime = time => {
@@ -44,8 +78,9 @@ const encodeNames = {
   '&gt;': '>',
   '&quot;': '"',
   '&apos;': "'",
+  '&#039;': "'",
 }
-export const decodeName = str => str.replace(/(?:&amp;|&lt;|&gt;|&quot;|&apos;)/g, s => encodeNames[s])
+export const decodeName = (str = '') => str.replace(/(?:&amp;|&lt;|&gt;|&quot;|&apos;|&#039;)/gm, s => encodeNames[s])
 
 const easeInOutQuad = (t, b, c, d) => {
   t /= d / 2
@@ -98,7 +133,7 @@ const handleScroll = (element, to, duration = 300, fn = () => {}) => {
  * @param {*} fn 滚动完成后的回调
  * @param {*} delay 延迟执行时间
  */
-export const scrollTo = (element, to, duration = 300, fn = () => {}, delay) => {
+export const scrollTo = (element, to, duration = 300, fn = () => {}, delay = 0) => {
   let cancelFn
   let timeout
   if (delay) {
@@ -197,6 +232,7 @@ export const objectDeepMerge = (target, source, mergedObj) => {
  * @param {*} url
  */
 export const openUrl = url => {
+  if (!/^https?:\/\//.test(url)) return
   shell.openExternal(url)
 }
 
@@ -341,3 +377,33 @@ export const getProxyInfo = () => window.globalObj.proxy.enable
 
 
 export const assertApiSupport = source => window.globalObj.qualityList[source] != undefined
+
+export const getSetting = () => rendererInvoke(NAMES.mainWindow.get_setting)
+export const saveSetting = () => rendererInvoke(NAMES.mainWindow.set_app_setting)
+
+export const getPlayList = () => rendererInvoke(NAMES.mainWindow.get_playlist).catch(error => {
+  rendererInvoke(NAMES.mainWindow.get_data_path).then(dataPath => {
+    let filePath = path.join(dataPath, 'playList.json.bak')
+    rendererInvoke(NAMES.mainWindow.show_dialog, {
+      type: 'error',
+      message: window.i18n.t('store.state.load_list_file_error_title'),
+      detail: window.i18n.t('store.state.load_list_file_error_detail', {
+        path: filePath,
+        detail: error.message,
+      }),
+    }).then(() => openDirInExplorer(filePath))
+  })
+  return rendererInvoke(NAMES.mainWindow.get_playlist, true)
+})
+
+// 解析URL参数为对象
+export const parseUrlParams = str => {
+  const params = {}
+  if (typeof str !== 'string') return params
+  const paramsArr = str.split('&')
+  for (const param of paramsArr) {
+    let [key, value] = param.split('=')
+    params[key] = value
+  }
+  return params
+}

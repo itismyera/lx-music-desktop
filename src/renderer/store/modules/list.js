@@ -1,3 +1,5 @@
+import musicSdk from '../../utils/music'
+
 let allList = {}
 window.allList = allList
 
@@ -28,6 +30,12 @@ const state = {
     list: [],
     location: 0,
   },
+  tempList: {
+    id: 'temp',
+    name: '临时列表',
+    list: [],
+    location: 0,
+  },
   userList: [],
 }
 
@@ -42,19 +50,24 @@ const getters = {
 
 // actions
 const actions = {
-
+  getOtherSource({ state, commit }, musicInfo) {
+    return (musicInfo.otherSource && musicInfo.otherSource.length ? Promise.resolve(musicInfo.otherSource) : musicSdk.findMusic(musicInfo)).then(otherSource => {
+      commit('setOtherSource', { musicInfo, otherSource })
+      return otherSource
+    })
+  },
 }
 
 // mitations
 const mutations = {
   initList(state, { defaultList, loveList, userList }) {
-    if (defaultList != null) state.defaultList.list = defaultList.list
-    if (loveList != null) state.loveList.list = loveList.list
+    if (defaultList != null) Object.assign(state.defaultList, { list: defaultList.list, location: defaultList.location })
+    if (loveList != null) Object.assign(state.loveList, { list: loveList.list, location: loveList.location })
     if (userList != null) state.userList = userList
     allListInit(state.defaultList, state.loveList, state.userList)
     state.isInitedList = true
   },
-  setList(state, { id, list, name, location }) {
+  setList(state, { id, list, name, location, source, sourceListId }) {
     const targetList = allList[id]
     if (targetList) {
       if (name && targetList.name === name) {
@@ -70,6 +83,8 @@ const mutations = {
       id,
       list,
       location,
+      source,
+      sourceListId,
     }
     state.userList.push(newList)
     allListUpdate(newList)
@@ -86,8 +101,7 @@ const mutations = {
     if (!fromList || !toList) return
     fromList.list.splice(fromList.list.indexOf(musicInfo), 1)
     let index = toList.list.findIndex(s => s.songmid === musicInfo.songmid)
-    if (index > -1) return toList.list.splice(index, 1)
-    toList.list.push(musicInfo)
+    if (index < 0) toList.list.push(musicInfo)
   },
   listAddMultiple(state, { id, list }) {
     let targetList = allList[id]
@@ -104,7 +118,7 @@ const mutations = {
   },
   // { fromId, toId, list }
   listMoveMultiple(state, { fromId, toId, list }) {
-    console.log(state.commit)
+    // console.log(state.commit)
     this.commit('list/listRemoveMultiple', { id: fromId, list })
     this.commit('list/listAddMultiple', { id: toId, list })
   },
@@ -135,20 +149,26 @@ const mutations = {
     if (!targetList) return
     targetList.list.splice(0, targetList.list.length)
   },
-  updateMusicInfo(state, { id, index, data }) {
+  updateMusicInfo(state, { id, index, data, musicInfo = {} }) {
     let targetList = allList[id]
-    if (!targetList) return
+    if (!targetList) return Object.assign(musicInfo, data)
     Object.assign(targetList.list[index], data)
   },
-  createUserList(state, name) {
-    let newList = {
-      name,
-      id: `userlist_${Date.now()}`,
-      list: [],
-      location: 0,
+  createUserList(state, { name, id = `userlist_${Date.now()}`, list = [], source, sourceListId }) {
+    let newList = state.userList.find(item => item.id === id)
+    if (!newList) {
+      newList = {
+        name,
+        id,
+        list: [],
+        location: 0,
+        source,
+        sourceListId,
+      }
+      state.userList.push(newList)
+      allListUpdate(newList)
     }
-    state.userList.push(newList)
-    allListUpdate(newList)
+    this.commit('list/listAddMultiple', { id, list })
   },
   removeUserList(state, index) {
     let list = state.userList.splice(index, 1)[0]
@@ -171,6 +191,28 @@ const mutations = {
   },
   setListScroll(state, { id, location }) {
     if (allList[id]) allList[id].location = location
+  },
+  sortList(state, { id, sortNum, musicInfos }) {
+    let targetList = allList[id]
+    this.commit('list/listRemoveMultiple', { id, list: musicInfos })
+
+    targetList.list.splice(sortNum - 1, 0, ...musicInfos)
+  },
+  clearCache() {
+    const lists = Object.values(allList)
+    for (const { list } of lists) {
+      for (const item of list) {
+        if (item.otherSource) item.otherSource = null
+        if (item.typeUrl['128k']) delete item.typeUrl['128k']
+        if (item.typeUrl['320k']) delete item.typeUrl['320k']
+        if (item.typeUrl.flac) delete item.typeUrl.flac
+        if (item.typeUrl.wav) delete item.typeUrl.wav
+        // if (item.lxlrc == '') item.lxlrc = null
+      }
+    }
+  },
+  setOtherSource(state, { musicInfo, otherSource }) {
+    musicInfo.otherSource = otherSource
   },
 }
 

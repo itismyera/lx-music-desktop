@@ -4,37 +4,57 @@
     //- div(:class="$style.bg2")
     div(:class="$style.header")
       div(:class="$style.controBtn")
-        button(type="button" :class="$style.hide" :title="$t('core.player.hide_detail')" @click="visiblePlayerDetail(false)")
+        button(type="button" :class="$style.hide" :tips="$t('core.player.hide_detail')" @click="visiblePlayerDetail(false)")
           svg(:class="$style.controBtnIcon" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='80%' viewBox='0 0 30.727 30.727' space='preserve')
             use(xlink:href='#icon-window-hide')
-        button(type="button" :class="$style.min" :title="$t('core.toolbar.min')" @click="min")
+        button(type="button" :class="$style.min" :tips="$t('core.toolbar.min')" @click="min")
           svg(:class="$style.controBtnIcon" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='100%' viewBox='0 0 24 24' space='preserve')
             use(xlink:href='#icon-window-minimize')
 
         //- button(type="button" :class="$style.max" @click="max")
-        button(type="button" :class="$style.close" :title="$t('core.toolbar.close')" @click="close")
+        button(type="button" :class="$style.close" :tips="$t('core.toolbar.close')" @click="close")
           svg(:class="$style.controBtnIcon" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='100%' viewBox='0 0 24 24' space='preserve')
             use(xlink:href='#icon-window-close')
 
-    div(:class="$style.main")
+    div(:class="[$style.main, isShowComment ? $style.showComment : null]")
       div(:class="$style.left")
+        //- div(:class="$style.info")
         div(:class="$style.info")
-          div(:class="$style.img")
-            img(:src="musicInfo.img" v-if="musicInfo.img")
+          img(:class="$style.img" :src="musicInfo.img" v-if="musicInfo.img")
           div(:class="$style.description")
             p {{$t('core.player.name')}}{{musicInfo.name}}
             p {{$t('core.player.singer')}}{{musicInfo.singer}}
             p(v-if="musicInfo.album") {{$t('core.player.album')}}{{musicInfo.album}}
-        //- div(:class="$style.list")
-          ul
 
       div(:class="$style.right")
         div(:class="[$style.lyric, lyricEvent.isMsDown ? $style.draging : null]" @wheel="handleWheel" @mousedown="handleLyricMouseDown" ref="dom_lyric")
           div(:class="$style.lyricSpace")
-          p(v-for="(info, index) in lyricLines" :key="index" :class="lyric.line == index ? $style.lrcActive : null") {{info.text}}
+          div(:class="[$style.lyricText]" ref="dom_lyric_text")
+          //- p(v-for="(info, index) in lyricLines" :key="index" :class="lyric.line == index ? $style.lrcActive : null") {{info.text}}
           div(:class="$style.lyricSpace")
+
+      material-music-comment(:class="$style.comment" :titleFormat="this.setting.download.fileName" :musicInfo="musicInfo" v-model="isShowComment")
+
     div(:class="$style.footer")
-      div(:class="$style.left")
+      div(:class="$style.footerLeft")
+        div(:class="$style.footerLeftControlBtns")
+          div(:class="[$style.footerLeftControlBtn, isShowComment ? $style.active : null]" @click="isShowComment = !isShowComment" :tips="$t('core.player.comment_show')")
+            svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='95%' viewBox='0 0 24 24' space='preserve')
+              use(xlink:href='#icon-comment')
+          div(:class="$style.footerLeftControlBtn" @click="$emit('toggle-next-play-mode')" :tips="nextTogglePlayName")
+            svg(v-if="setting.player.togglePlayMethod == 'listLoop'" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' viewBox='0 0 24 24' space='preserve')
+              use(xlink:href='#icon-list-loop')
+            svg(v-else-if="setting.player.togglePlayMethod == 'random'" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' viewBox='0 0 24 24' space='preserve')
+              use(xlink:href='#icon-list-random')
+            svg(v-else-if="setting.player.togglePlayMethod == 'list'" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='120%' viewBox='0 0 24 24' space='preserve')
+              use(xlink:href='#icon-list-order')
+            svg(v-else-if="setting.player.togglePlayMethod == 'singleLoop'" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='110%' viewBox='0 0 24 24' space='preserve')
+              use(xlink:href='#icon-single-loop')
+            svg(v-else version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' width='120%' viewBox='0 0 24 24' space='preserve')
+              use(xlink:href='#icon-single')
+          div(:class="$style.footerLeftControlBtn" @click="$emit('add-music-to', musicInfo)" :tips="$t('core.player.add_music_to')")
+            svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' viewBox='0 0 512 512' space='preserve')
+              use(xlink:href='#icon-add-2')
         div(:class="$style.progressContainer")
           div(:class="$style.progressContent")
             div(:class="$style.progress")
@@ -50,15 +70,15 @@
       div(:class="$style.playControl")
         //- div(:class="$style.playBtn")
         //- div(:class="$style.playBtn")
-        div(:class="$style.playBtn" @click="$emit('action', { type: 'prev' })" style="transform: rotate(180deg);" :title="$t('core.player.prev')")
+        div(:class="$style.playBtn" @click="$emit('action', { type: 'prev' })" style="transform: rotate(180deg);" :tips="$t('core.player.prev')")
           svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 220.847 220.847' space='preserve')
             use(xlink:href='#icon-nextMusic')
-        div(:class="$style.playBtn" :title="isPlay ? $t('core.player.pause') : $t('core.player.play')" @click="$emit('action', { type: 'togglePlay' })")
+        div(:class="$style.playBtn" :tips="isPlay ? $t('core.player.pause') : $t('core.player.play')" @click="$emit('action', { type: 'togglePlay' })")
           svg(v-if="isPlay" version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 277.338 277.338' space='preserve')
             use(xlink:href='#icon-pause')
           svg(v-else version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 170 170' space='preserve')
             use(xlink:href='#icon-play')
-        div(:class="$style.playBtn" @click="$emit('action', { type: 'next' })" :title="$t('core.player.next')")
+        div(:class="$style.playBtn" @click="$emit('action', { type: 'next' })" :tips="$t('core.player.next')")
           svg(version='1.1' xmlns='http://www.w3.org/2000/svg' xlink='http://www.w3.org/1999/xlink' height='100%' viewBox='0 0 220.847 220.847' space='preserve')
             use(xlink:href='#icon-nextMusic')
 </template>
@@ -124,6 +144,7 @@ export default {
       type: Boolean,
       default: false,
     },
+    nextTogglePlayName: String,
   },
   watch: {
     // 'musicInfo.img': {
@@ -138,11 +159,14 @@ export default {
       handler(n, o) {
         this.isSetedLines = true
         if (o) {
+          this.$refs.dom_lyric_text.textContent = ''
+          this.setLyric(n)
+
           this._lyricLines = n
           if (n.length) {
             this.lyricLines = n
             this.$nextTick(() => {
-              this.dom_lines = this.$refs.dom_lyric.querySelectorAll('p')
+              this.dom_lines = this.$refs.dom_lyric.querySelectorAll('.lrc-content')
               this.handleScrollLrc()
             })
           } else {
@@ -154,7 +178,7 @@ export default {
               if (this.lyricLines === this._lyricLines && this._lyricLines.length) return
               this.lyricLines = this._lyricLines
               this.$nextTick(() => {
-                this.dom_lines = this.$refs.dom_lyric.querySelectorAll('p')
+                this.dom_lines = this.$refs.dom_lyric.querySelectorAll('.lrc-content')
                 this.handleScrollLrc()
               })
             }, 50)
@@ -162,7 +186,7 @@ export default {
         } else {
           this.lyricLines = n
           this.$nextTick(() => {
-            this.dom_lines = this.$refs.dom_lyric.querySelectorAll('p')
+            this.dom_lines = this.$refs.dom_lyric.querySelectorAll('.lrc-content')
             this.handleScrollLrc()
           })
         }
@@ -205,6 +229,7 @@ export default {
       _lyricLines: [],
       lyricLines: [],
       isSetedLines: false,
+      isShowComment: false,
     }
   },
   mounted() {
@@ -214,6 +239,8 @@ export default {
     document.addEventListener('mousemove', this.handleMouseMsMove)
     document.addEventListener('mouseup', this.handleMouseMsUp)
     window.addEventListener('resize', this.handleResize)
+    // console.log('object', this.$refs.dom_lyric_text)
+    this.setLyric(this.lyricLines)
   },
   beforeDestroy() {
     this.clearLyricScrollTimeout()
@@ -229,6 +256,13 @@ export default {
     ...mapMutations('player', [
       'visiblePlayerDetail',
     ]),
+    setLyric(lines) {
+      const dom_lines = document.createDocumentFragment()
+      for (const line of lines) {
+        dom_lines.appendChild(line.dom_line)
+      }
+      this.$refs.dom_lyric_text.appendChild(dom_lines)
+    },
     handleResize() {
       this.setProgressWidth()
     },
@@ -452,33 +486,56 @@ export default {
   overflow: hidden;
   display: flex;
   padding: 0 30px;
+
+  &.showComment {
+    .left {
+      flex-basis: 18%;
+      .description p {
+        font-size: 12px;
+      }
+    }
+    .right {
+      flex-basis: 30%;
+      .lyric {
+        font-size: 13px;
+      }
+    }
+    .comment {
+      flex-basis: 50%;
+      opacity: 1;
+    }
+  }
 }
 .left {
-  flex: 0 0 40%;
-  overflow: hidden;
-}
-.info {
+  flex: 40%;
   display: flex;
   flex-flow: column nowrap;
   align-items: center;
+  padding: 13px;
+  overflow: hidden;
+  transition: flex-basis @transition-theme;
+}
+
+.info {
+  display: flex;
+  flex-flow: column nowrap;
+  justify-content: flex-start;
+  max-width: 300px;
+
 }
 .img {
-  width: 300px;
-  height: 300px;
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-
-  img {
-    max-width: 100%;
-    max-height: 100%;
-    border: 5px solid @color-theme-hover;
-    // border-radius: @radius-border;
-    // border: 5px solid #fff;
-  }
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 100%;
+  box-shadow: 0 0 4px @color-theme-hover;
+  border-radius: 6px;
+  opacity: .8;
+  // border: 5px solid @color-theme-hover;
+  // border-radius: @radius-border;
+  // border: 5px solid #fff;
 }
 .description {
-  width: 300px;
+  max-width: 300px;
   padding: 15px 0;
   overflow: hidden;
   p {
@@ -492,8 +549,11 @@ export default {
   flex: 0 0 60%;
   // padding: 0 30px;
   position: relative;
+  transition: flex-basis @transition-theme;
+
   &:before {
     position: absolute;
+    z-index: 1;
     top: 0;
     left: 0;
     content: ' ';
@@ -519,16 +579,62 @@ export default {
   overflow: hidden;
   font-size: 16px;
   cursor: grab;
+  color: @color-theme_2-font;
   &.draging {
     cursor: grabbing;
   }
-  p {
-    padding: 8px 0;
-    line-height: 1.2;
-    overflow-wrap: break-word;
-    transition: @transition-theme;
-    transition-property: color, font-size;
+  :global {
+    .lrc-content {
+      line-height: 1.2;
+      margin: 16px 0;
+      overflow-wrap: break-word;
+
+      .translation {
+        transition: @transition-theme !important;
+        transition-property: font-size, color;
+        font-size: 1em;
+        margin-top: 5px;
+      }
+      .line {
+        transition-property: font-size, color !important;
+        background: none !important;
+        -webkit-text-fill-color: unset;
+        // -webkit-text-fill-color: none !important;
+      }
+      &.active {
+        .line {
+          color: @color-theme;
+        }
+        .translation {
+          font-size: 1.2em;
+          color: @color-theme;
+        }
+        span {
+          // color: @color-theme;
+          font-size: 1.2em;
+        }
+      }
+
+      span {
+        transition: @transition-theme !important;
+        transition-property: font-size !important;
+        font-size: 1em;
+        background-repeat: no-repeat;
+        background-color: rgba(77, 77, 77, 0.9);
+        background-image: -webkit-linear-gradient(top, @color-theme, @color-theme);
+        -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text;
+        background-size: 0 100%;
+      }
+    }
   }
+  // p {
+  //   padding: 8px 0;
+  //   line-height: 1.2;
+  //   overflow-wrap: break-word;
+  //   transition: @transition-theme !important;
+  //   transition-property: color, font-size;
+  // }
 }
 .lyric-space {
   height: 70%;
@@ -537,18 +643,51 @@ export default {
   color: @color-theme;
   font-size: 1.2em;
 }
+
+.comment {
+  flex: 0 0 0;
+  opacity: 0;
+  margin-left: 10px;
+}
+
 .footer {
   flex: 0 0 100px;
   overflow: hidden;
   display: flex;
   align-items: center;
 }
-.left {
+.footerLeft {
   flex: auto;
   display: flex;
   flex-flow: column nowrap;
-  align-items: center;
-  padding-top: 13px;
+  padding: 13px;
+  overflow: hidden;
+}
+.footerLeftControlBtns {
+  color: @color-theme_2-font;
+  display: flex;
+  flex-flow: row nowrap;
+  justify-content: flex-end;
+}
+.footerLeftControlBtn {
+  width: 18px;
+  height: 18px;
+  opacity: .5;
+  cursor: pointer;
+  transition: opacity @transition-theme;
+
+  &:hover {
+    opacity: .9;
+  }
+
+  +.footerLeftControlBtn {
+    margin-left: 6px;
+  }
+
+  &.active {
+    color: @color-theme;
+    opacity: .8;
+  }
 }
 .progress-container {
   width: 100%;
@@ -608,6 +747,7 @@ export default {
 }
 .time-label {
   width: 100%;
+  height: 18px;
   display: flex;
   justify-content: space-between;
   span {
@@ -656,6 +796,7 @@ each(@themes, {
     .container {
       border-left-color: ~'@{color-@{value}-theme}';
       background-color: ~'@{color-@{value}-theme_2-background_1}';
+      // color: ~'@{color-@{value}-theme_2-font}';
     }
     .right {
       &:before {
@@ -686,12 +827,37 @@ each(@themes, {
       }
     }
     .img {
-      img {
-        border-color: ~'@{color-@{value}-theme-hover}';
+      box-shadow: 0 0 4px ~'@{color-@{value}-theme-hover}';
+      // border-color: ~'@{color-@{value}-theme-hover}';
+    }
+    .lyric {
+      :global {
+        .lrc-content {
+          &.active {
+            .translation {
+              color: ~'@{color-@{value}-theme}';
+            }
+            .line {
+              color: ~'@{color-@{value}-theme}';
+            }
+          }
+          span {
+            // background-color: ~'@{color-@{value}-theme_2-font}';
+            background-image: -webkit-linear-gradient(top, ~'@{color-@{value}-theme}', ~'@{color-@{value}-theme}');
+          }
+        }
       }
     }
-    .lrc-active {
-      color: ~'@{color-@{value}-theme}';
+    // .lrc-active {
+    //   color: ~'@{color-@{value}-theme}';
+    // }
+    .footerLeftControlBtns {
+      color: ~'@{color-@{value}-theme_2-font}';
+    }
+    .footerLeftControlBtn {
+      &.active {
+        color: ~'@{color-@{value}-theme}';
+      }
     }
     .progress {
       background-color: ~'@{color-@{value}-player-progress}';

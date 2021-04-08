@@ -10,11 +10,9 @@
             h3(:title="listDetail.info.name || selectListInfo.name") {{listDetail.info.name || selectListInfo.name}}
             p(:title="listDetail.info.desc || selectListInfo.desc") {{listDetail.info.desc || selectListInfo.desc}}
           div(:class="$style.songListHeaderRight")
-            //- material-btn(:class="$style.closeDetailButton" :disabled="detailLoading" @click="addSongListDetail") 添加
-            //- | &nbsp;
-            //- material-btn(:class="$style.closeDetailButton" :disabled="detailLoading" @click="playSongListDetail") 播放
-            //- | &nbsp;
-            material-btn(:class="$style.closeDetailButton" @click="hideListDetail") {{$t('view.song_list.back')}}
+            material-btn(:class="$style.headerRightBtn" :disabled="detailLoading" @click="playSongListDetail") {{$t('view.song_list.play_all')}}
+            material-btn(:class="$style.headerRightBtn" :disabled="detailLoading" @click="addSongListDetail") {{$t('view.song_list.add_all')}}
+            material-btn(:class="$style.headerRightBtn" @click="hideListDetail") {{$t('view.song_list.back')}}
         material-song-list(v-model="selectedData" @action="handleSongListAction" :source="source" :page="listDetail.page" :limit="listDetail.limit"
          :total="listDetail.total" :noItem="isGetDetailFailed ? $t('view.song_list.loding_list_fail') : $t('view.song_list.loding_list')" :list="listDetail.list")
     transition(enter-active-class="animated-fast fadeIn" leave-active-class="animated-fast fadeOut")
@@ -25,7 +23,7 @@
           material-select(:class="$style.select" :list="sourceInfo.sources" item-key="id" item-name="name" v-model="source")
         div(:class="$style.songListContent")
           transition(enter-active-class="animated-fast fadeIn" leave-active-class="animated-fast fadeOut")
-            div(:class="$style.songListContent" v-show="listData.list.length")
+            div(:class="$style.songListContent")
               transition(enter-active-class="animated-fast fadeIn" leave-active-class="animated-fast fadeOut")
                 div.scroll(:class="$style.songList" v-if="sortId !== 'importSongList'" ref="dom_scrollContent")
                   ul
@@ -33,7 +31,7 @@
                       div(:class="$style.left" :style="{ backgroundImage: 'url('+item.img+')' }")
                         //- img(:src="item.img")
                       div(:class="$style.right" :src="item.img")
-                        h4(:title="item.name") {{item.name}}
+                        h4 {{item.name}}
                         p(:class="$style.play_count") {{item.play_count}}
                         p(:class="$style.author") {{item.author}}
                     li(:class="$style.item" style="cursor: default;" v-for="i in spaceNum")
@@ -51,7 +49,7 @@
                         li {{$t('view.song_list.tip_2')}}
                         li {{$t('view.song_list.tip_3')}}
           transition(enter-active-class="animated-fast fadeIn" leave-active-class="animated-fast fadeOut")
-            div(v-show="!listData.list.length" :class="$style.noitem")
+            div(v-show="!listData.list.length && sortId !== 'importSongList'" :class="$style.noitem")
               p {{$t('view.song_list.loding_list')}}
     material-download-modal(:show="isShowDownload" :musicInfo="musicInfo" @select="handleAddDownload" @close="isShowDownload = false")
     material-download-multiple-modal(:show="isShowDownloadMultiple" :list="selectedData" @select="handleAddDownloadMultiple" @close="isShowDownloadMultiple = false")
@@ -84,7 +82,7 @@ export default {
       listWidth: 645,
       isGetDetailFailed: false,
       isInitedTagListWidth: false,
-      // detailLoading: true,
+      detailLoading: false,
     }
   },
   computed: {
@@ -97,7 +95,7 @@ export default {
       switch (this.source) {
         case 'wy':
         case 'kw':
-        case 'bd':
+        // case 'bd':
         case 'tx':
         case 'mg':
         case 'kg':
@@ -179,11 +177,14 @@ export default {
   },
   methods: {
     ...mapMutations(['setSongList']),
-    ...mapActions('songList', ['getTags', 'getList', 'getListDetail']),
+    ...mapActions('songList', ['getTags', 'getList', 'getListDetail', 'getListDetailAll']),
     ...mapMutations('songList', ['setVisibleListDetail', 'setSelectListInfo']),
     ...mapActions('download', ['createDownload', 'createDownloadMultiple']),
-    ...mapMutations('list', ['listAdd', 'listAddMultiple']),
-    ...mapMutations('player', ['setList']),
+    ...mapMutations('list', ['listAdd', 'listAddMultiple', 'createUserList']),
+    ...mapMutations('player', {
+      setPlayList: 'setList',
+      setTempPlayList: 'setTempPlayList',
+    }),
     listenEvent() {
       window.eventHub.$on('key_backspace_down', this.handle_key_backspace_down)
     },
@@ -238,10 +239,18 @@ export default {
           break
         case 'play':
           if (this.selectedData.length) {
-            this.listAddMultiple({ id: 'default', list: this.filterList(this.selectedData) })
+            this.listAddMultiple({ id: 'default', list: [...this.selectedData] })
             this.resetSelect()
           }
           this.testPlay(info.index)
+          break
+        case 'playLater':
+          if (this.selectedData.length) {
+            this.setTempPlayList(this.selectedData.map(s => ({ listId: '__temp__', musicInfo: s })))
+            this.resetSelect()
+          } else {
+            this.setTempPlayList([{ listId: '__temp__', musicInfo: this.listDetail.list[info.index] }])
+          }
           break
         case 'search':
           this.handleSearch(info.index)
@@ -273,7 +282,7 @@ export default {
         s => s.songmid === targetSong.songmid,
       )
       if (targetIndex > -1) {
-        this.setList({
+        this.setPlayList({
           list: this.defaultList,
           index: targetIndex,
         })
@@ -373,6 +382,7 @@ export default {
       }
     },
     handleGetSongListDetail() {
+      if (!this.importSongListText.length) return
       this.setSelectListInfo({
         play_count: null,
         id: this.importSongListText,
@@ -402,15 +412,34 @@ export default {
     assertApiSupport(source) {
       return assertApiSupport(source)
     },
-    /*     addSongListDetail() {
-      // this.detailLoading = true
-      // this.getListDetailAll(this.selectListInfo.id).then(() => {
-      //   this.detailLoading = false
-      // })
+    async fetchList() {
+      this.detailLoading = true
+      return this.getListDetailAll({ source: this.source, id: this.selectListInfo.id }).finally(() => {
+        this.detailLoading = false
+      })
     },
-    playSongListDetail() {
-
-    }, */
+    async addSongListDetail() {
+      if (!this.listDetail.info.name) return
+      const list = await this.fetchList()
+      this.createUserList({
+        name: this.listDetail.info.name,
+        id: `${this.listDetail.source}__${this.listDetail.id}`,
+        list,
+        source: this.listDetail.source,
+        sourceListId: this.listDetail.id,
+      })
+    },
+    async playSongListDetail() {
+      if (!this.listDetail.info.name) return
+      const list = await this.fetchList()
+      this.setPlayList({
+        list: {
+          list,
+          id: null,
+        },
+        index: 0,
+      })
+    },
   },
 }
 </script>
@@ -516,6 +545,17 @@ export default {
   display: flex;
   align-items: center;
   padding-right: 15px;
+}
+.header-right-btn {
+  border-radius: 0;
+  &:first-child {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+  }
+  &:last-child {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+  }
 }
 
 .song-list-detail-content {
